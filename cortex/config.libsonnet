@@ -241,24 +241,7 @@
     ruler_s3_bucket_name: $._config.s3_bucket_name,
     ruler_gcs_bucket_name: error 'must specify a GCS bucket name',
 
-    rulerClientConfig:
-      {
-        'ruler.storage.type': $._config.ruler_client_type,
-      } +
-      {
-        configdb: {
-          configs_api_url: 'config.%s.svc.cluster.local' % $._config.namespace,
-        },
-        gcs: {
-          'ruler.storage.gcs.bucketname': $._config.ruler_gcs_bucket_name,
-        },
-        s3: {
-          's3.url': 'https://%s/%s' % [$._config.aws_region, $._config.ruler_s3_bucket_name],
-        },
-        'local': {
-          'ruler.storage.local.directory': $._config.ruler_local_directory,
-        },
-      }[$._config.ruler_client_type],
+    rulerClientConfig: $.prefixedStorageArgs('ruler'),
 
     alertmanager: {
       replicas: 3,
@@ -352,6 +335,12 @@
     enable_pod_priorities: true,
 
     alertmanager_enabled: false,
+    alertmanager_client_type: error 'you must specify a storage backend type for the alertmanager (configdb, gcs, s3)',
+    // TODO: Generic client generating functions would be nice.
+    alertmanager_s3_bucket_name: $._config.s3_bucket_name,
+    alertmanager_gcs_bucket_name: error 'must specify a GCS bucket name',
+
+    alertmanagerClientConfig: $.prefixedStorageArgs('alertmanager'),
   },
 
   local configMap = $.core.v1.configMap,
@@ -394,4 +383,25 @@
       },
     },
   },
+
+  // Given a target 'string' return an object of common storage options prefixed by the target.
+  // Expects configs of '{target}_client_type': configdb, gcs, local or s3.
+  prefixedStorageArgs:: function(target)
+    {
+      ['%s.storage.type' % target]: $._config['%s_client_type' % target],
+    } +
+    {
+      configdb: {
+        configs_api_url: 'config.%s.svc.cluster.local' % $._config.namespace,
+      },
+      gcs: {
+        ['%s.storage.gcs.bucketname' % target]: $._config['%s_gcs_bucket_name' % target],
+      },
+      s3: {
+        ['%s.storage.s3.url' % target]: 'https://%s/%s' % [$._config.aws_region, $._config['%s_s3_bucket_name' % target]],
+      },
+      'local': {
+        ['%s.storage.local.directory' % target]: $._config['%s_local_directory' % target],
+      },
+    }[$._config['%s_client_type' % target]],
 }
